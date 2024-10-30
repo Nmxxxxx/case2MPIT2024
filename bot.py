@@ -1,13 +1,5 @@
-import logging
-import aiohttp
-from aiogram import Bot, Dispatcher, types
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.utils import executor
-import uuid
-import requests
-import json
-import database
-import models
+from imports import *
+from banner import banner
 
 API_TOKEN = '7999577438:AAF-WBB8_ABAbEa-MhuR-4wTKL3s4xaUUm4' 
 GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions' 
@@ -21,10 +13,8 @@ bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
 
-
-async def on_startup(_):
-    await database.init_db()
-
+async def db_connect():
+    return await aiosqlite.connect('case2giga.db')
 
 def get_access_token():
     master_token = "YmZlNGMwYWQtM2E0ZS00NzQ3LWIzMzQtZWYxN2NjNTYxODEyOmZjOWQ0ZDNlLTlhMzctNGRiMi1iNTVmLTMzMjYwNmI2MzBjZg=="  # Задайте ваш токен здесь
@@ -75,20 +65,6 @@ async def get_gigachat_response(query: str) -> str:
                 return 'Ошибка: не удалось получить ответ от GigaChatAI.'
 
 
-@dp.message_handler(commands=['get'])
-async def get_item(message: types.Message):
-    item_id = message.get_args()
-    async with database.SessionLocal() as session:  # Используйте AsyncSession
-        result = await session.execute(database.select(models.Item).where(models.Item.id == item_id))
-        item = result.scalars().first()
-
-    if item:
-        await message.reply(f"Name: {item.name}\nDescription: {item.description}\nTags: {item.tags}")
-    else:
-        await message.reply("Item not found.")
-
-
-
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("""
@@ -108,6 +84,16 @@ async def send_welcome(message: types.Message):
 Ваши предпочтения позволят мне предложить наиболее подходящие варианты для вашего путешествия. Давайте создадим вместе ваше идеальное приключение! 🌅✨
 """)
 
+@dp.message_handler(commands=['get_items'])
+async def get_items(message: types.Message):
+    db = await db_connect()
+    try:
+        async with db.execute("SELECT * FROM giga") as cursor:
+            items = await cursor.fetchall()
+            item_list = "\n".join([f"ID: {item[0]}\n◉ Название: {item[1]}\n◉ Описание: {item[2]}\n◉ Теги: {item[3]}\n" for item in items])
+            await message.answer(f"Элементы:\n{item_list}" if item_list else "Нет элементов.")
+    finally:
+        await db.close()
 
 @dp.message_handler(content_types=['text'])
 async def handle_text(message: types.Message):
@@ -115,5 +101,8 @@ async def handle_text(message: types.Message):
     response = await get_gigachat_response(user_query)
     await message.answer(response)
 #parse_mode
+
+
 if __name__ == '__main__':
+    print(banner)
     executor.start_polling(dp, skip_updates=True)
