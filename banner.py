@@ -12,5 +12,5 @@ banner = f"""
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠛⠛⠿⠿⠿⠿⠿⠿⠿⠿⠛⠉⠀⠀{PURPLE}AI {italic(text="GigaTour39")}{WHITE}
 
            {italic(text=f"BY {RED}nmx")}
-{PINK}nmx{WHITE}
+            {PINK}TEAM WANT{WHITE}
 """
