@@ -6,6 +6,8 @@ from aiogram.utils import executor
 import uuid
 import requests
 import json
+import database
+import models
 
 API_TOKEN = '7999577438:AAF-WBB8_ABAbEa-MhuR-4wTKL3s4xaUUm4' 
 GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions' 
@@ -18,6 +20,11 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=API_TOKEN)
 storage = MemoryStorage()
 dp = Dispatcher(bot, storage=storage)
+
+
+async def on_startup(_):
+    await database.init_db()
+
 
 def get_access_token():
     master_token = "YmZlNGMwYWQtM2E0ZS00NzQ3LWIzMzQtZWYxN2NjNTYxODEyOmZjOWQ0ZDNlLTlhMzctNGRiMi1iNTVmLTMzMjYwNmI2MzBjZg=="  # Задайте ваш токен здесь
@@ -67,6 +74,21 @@ async def get_gigachat_response(query: str) -> str:
                 logging.error("Ошибка запроса к GigaChat: %s", await response.text())
                 return 'Ошибка: не удалось получить ответ от GigaChatAI.'
 
+
+@dp.message_handler(commands=['get'])
+async def get_item(message: types.Message):
+    item_id = message.get_args()
+    async with database.SessionLocal() as session:  # Используйте AsyncSession
+        result = await session.execute(database.select(models.Item).where(models.Item.id == item_id))
+        item = result.scalars().first()
+
+    if item:
+        await message.reply(f"Name: {item.name}\nDescription: {item.description}\nTags: {item.tags}")
+    else:
+        await message.reply("Item not found.")
+
+
+
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     await message.reply("""
@@ -92,6 +114,6 @@ async def handle_text(message: types.Message):
     user_query = message.text
     response = await get_gigachat_response(user_query)
     await message.answer(response)
-
+#parse_mode
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
