@@ -1,6 +1,7 @@
 from imports import *
 from banner import banner
 import re
+import random
 
 API_TOKEN = '7999577438:AAF-WBB8_ABAbEa-MhuR-4wTKL3s4xaUUm4' 
 GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions' 
@@ -16,6 +17,7 @@ dp = Dispatcher(bot, storage=storage)
 
 async def db_connect():
     return await aiosqlite.connect('case2giga.db')
+
 
 async def get_places_from_db():
     db = await db_connect()
@@ -38,37 +40,40 @@ def extract_days(user_query: str) -> int:
 async def create_itinerary(days: int, preferences: list) -> str:
     if not preferences:
         return "Нет доступных мероприятий."
-
+    
     itinerary = []
-    total_hours_per_day = 24
-    daily_places = [[] for _ in range(days)]
-    total_time = 0
+    total_hours_per_day = 12  # Общее время на каждый день
+    used_places = set()  # Множество для хранения использованных мест
+
+    # Если количество мест меньше, чем количество дней, возвращаем ошибку
+    if len(preferences) < days:
+        return "Недостаточно уникальных мест для планирования всех дней."
 
     for day in range(days):
         available_time = total_hours_per_day
+        daily_places = []
+        
+       
+        available_preferences = [place for place in preferences if place[0] not in used_places]
+        
+        
+        random.shuffle(available_preferences)
 
-        for place_name, average_time in preferences:
-            print(f"Обработка места: {place_name}, время: {average_time}")
+        for place_name, average_time in available_preferences:
+            average_time_float = float(average_time)
 
-            try:
-                average_time_float = float(average_time)
-                if available_time >= average_time_float:
-                    daily_places[day].append((place_name, average_time_float))
-                    available_time -= average_time_float
-                    total_time += average_time_float
-                
-            except ValueError:
-                logging.error(f"Ошибка преобразования времени для {place_name}: {average_time}")
+            if available_time >= average_time_float:  
+                daily_places.append((place_name, average_time_float))
+                used_places.add(place_name)  
+                available_time -= average_time_float
+        
+        if daily_places:
 
-    for day in range(days):
-        if daily_places[day]:
-            day_itinerary = ', '.join([f"{place[0]} ({place[1]}ч)" for place in daily_places[day]])
-            daily_total_time = sum(place[1] for place in daily_places[day])
-            itinerary.append(f"День {day + 1}: {day_itinerary} - Общее время: {daily_total_time}ч")
+            day_itinerary = ', '.join([f"{place[0]} ({place[1]}ч)" for place in daily_places])
+            daily_total_time = sum(place[1] for place in daily_places)
+            itinerary.append(f"День {day + 1}: {day_itinerary} - Общее время: {daily_total_time:.1f}ч")
         else:
             itinerary.append(f"День {day + 1}: Нет доступных мероприятий.")
-
-    itinerary.append(f"\nОбщее время для маршрута: {total_time:.1f}ч")
 
     return "\n".join(itinerary)
 
