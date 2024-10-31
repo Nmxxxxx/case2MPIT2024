@@ -18,20 +18,31 @@ dp = Dispatcher(bot, storage=storage)
 async def db_connect():
     return await aiosqlite.connect('case2giga.db')
 
-reagents = ['маршрут', 'путь', 'маршут', 'мршрут', 'маршрт', 'мршрт', 'маршрyт', '']
+reagents = ['маршрут', 'путь', 'маршут', 'мршрут', 'маршрт', 'мршрт', 'маршрyт']
 
 async def get_places_from_db():
-    db = await db_connect()
     places = {}
+    db = await db_connect()
     try:
-        async with db.execute("SELECT name, average_time FROM giga") as cursor:
+        
+        async with db.execute("SELECT name, average_time, tags FROM giga") as cursor:
             async for row in cursor:
-                name = row[0].strip().lower()
-                average_time = row[1]
-                places[name] = average_time
-                print(f"Загружено место: {name}, время: {average_time}")
+                name = row[0].strip().lower()  
+                average_time = row[1] 
+                tags = row[2]  
+                
+                
+                tags_list = tags.split(',') if tags else [] 
+                
+                places[name] = {
+                    'average_time': average_time,
+                    'tags': tags_list
+                }
+
+                print(f"Загружено место: {name}, время: {average_time}, теги: {', '.join(tags_list)}")
     finally:
         await db.close()
+
     return places
 
 def extract_days(user_query: str) -> int:
@@ -40,48 +51,59 @@ def extract_days(user_query: str) -> int:
 
 async def create_itinerary(days: int, preferences: list) -> str:
     print(days)
+
     if not preferences:
         return "Нет доступных мероприятий."
 
-    total_hours_per_day = 12 
-    used_places = set()  
+    total_hours_per_day = 12
+    used_places = set()
     itinerary = []
-    num_places = len(preferences)  
-    places_per_day = max(1, num_places // days - 1)  
+
+    num_places = len(preferences)
+    places_per_day = max(1, num_places // days - 1)
 
     random.shuffle(preferences)
 
-    print(preferences)
     for day in range(days):
         available_time = total_hours_per_day
         daily_places = []
-        daily_count = 0  
+        daily_count = 0
 
-        for place_name, average_time in preferences:
-            if daily_count >= places_per_day:  
+        for place in preferences:
+            if len(place) < 3:  
+                continue  
+
+            place_name = place[0] 
+            average_time = place[1]  
+            tags = place[2] 
+
+            if daily_count >= places_per_day:
                 break
-            if place_name not in used_places:  
+
+            if place_name not in used_places:
                 average_time_float = float(average_time)
 
-                if available_time >= average_time_float:  
-                    daily_places.append((place_name, average_time_float))
-                    used_places.add(place_name)  
+                if available_time >= average_time_float:
+                    daily_places.append((place_name, average_time_float, tags))
+                    used_places.add(place_name)
                     available_time -= average_time_float
-                    daily_count += 1 
+                    daily_count += 1
 
         if daily_places:
             day_itinerary = ', '.join([f"{place[0]} ({place[1]}ч)" for place in daily_places])
+            daily_tags = ', '.join([', '.join(place[2]) for place in daily_places])  # Объединяем теги
+
             daily_total_time = sum(place[1] for place in daily_places)
-            
+
             itinerary.append(f"🌟 **День {day + 1}** 🌟\n\n"
-                 f"🗺️ **Места для посещения:**\n"
-                 f"{day_itinerary}\n\n"
-                 f"⏰ **Общее время**: {daily_total_time:.1f} ч\n\n")
+                             f"🗺️ **Места для посещения:**\n"
+                             f"{day_itinerary}\n"
+                             f"**Теги:** {daily_tags}\n\n"  # Добавляем теги
+                             f"⏰ **Общее время**: {daily_total_time:.1f} ч\n\n")
         else:
             itinerary.append(f"День {day + 1}: Нет доступных мероприятий.")
 
     return "\n".join(itinerary)
-
 def get_access_token():
     master_token = "YmZlNGMwYWQtM2E0ZS00NzQ3LWIzMzQtZWYxN2NjNTYxODEyOmZjOWQ0ZDNlLTlhMzctNGRiMi1iNTVmLTMzMjYwNmI2MzBjZg=="
     headers = {
@@ -214,7 +236,7 @@ async def handle_text(message: types.Message):
             await message.answer(response)
         else:
             days = extract_days(user_query)
-            preferences = await get_gigachat_response(user_query)
+            preferences = await get_message_from_gigachat(user_query)
             itinerary = await create_itinerary(days, preferences)
             await message.answer(itinerary)
     else:
