@@ -21,25 +21,28 @@ async def db_connect():
 reagents = ['маршрут', 'путь', 'маршут', 'мршрут', 'маршрт', 'мршрт', 'маршрyт']
 
 async def get_places_from_db():
-    db = await db_connect()  # Убедитесь, что функция db_connect корректно открывает соединение
+    db = await db_connect()
     places = []
     try:
         async with db.execute("SELECT name, average_time, tags FROM giga") as cursor:
             async for row in cursor:
-                name = row[0].strip()  # Удаляем пробелы, если есть
-                average_time = row[1]  # Время
-                tags = row[2].split(',') if row[2] else []  # Если теги существуют, разделяем их на список
+                name = row[0].strip().lower()
+                average_time = row[1]
 
-                # Добавляем место в список
+                tags = row[2].split(',') if row[2] else []
+                tags = [tag.strip() for tag in tags]  
+
                 places.append({
                     'name': name,
                     'average_time': average_time,
-                    'tags': [tag.strip() for tag in tags]  # Убираем пробелы
+                    'tags': tags
                 })
-    except Exception as e:
-        print(f"Ошибка при извлечении данных: {e}")  # Выводим ошибку для отладки
+
+                print(f"Загружено место: {name}, время: {average_time}, теги: {tags}")
+
     finally:
-        await db.close()  # Закрываем соединение
+        await db.close()
+
     return places
 
 def extract_days(user_query: str) -> int:
@@ -47,43 +50,35 @@ def extract_days(user_query: str) -> int:
     return int(match.group(1)) if match else 1
 
 async def create_itinerary(days: int, preferences: list) -> str:
-    total_hours_per_day = 8
-    max_places_per_day = 3  
+    total_hours_per_day = 12
+    used_places = set()
     itinerary = []
-    
-    if len(preferences) < days:
-        return "Недостаточно предпочтений для каждого дня."
 
-    random.shuffle(preferences)
 
-    used_places = set()  
-    beach_added_today = False  
+    random.shuffle(preferences)  
+    print()
+    print()
+    print('#'*5)
+    print(preferences)
 
+    print('#'*5)
+    print()
+    print()
     for day in range(days):
-        available_time = total_hours_per_day
-        daily_places = []
-        day_total_time = 0
-
+        available_time = total_hours_per_day 
+        daily_places = []  
+        day_total_time = 0  
         for place in preferences:
             if place['name'] not in used_places:
                 average_time = float(place['average_time'])
-                if len(daily_places) < max_places_per_day:
-                    if 'пляж' in place['tags']:
-                        if not beach_added_today: 
-                            daily_places.append(place)
-                            used_places.add(place['name'])
 
-                            available_time -= average_time  
-                            day_total_time += average_time  
-                            beach_added_today = True 
-                        
-                    else: 
-                        if available_time >= average_time:  
-                            daily_places.append(place)
-                            used_places.add(place['name'])
+                
+                if available_time >= average_time:
+                    daily_places.append(place)  
+                    used_places.add(place['name'])  
+                    available_time -= average_time  
+                    day_total_time += average_time  
 
-                            available_time -= average_time  
-                            day_total_time += average_time  
         if daily_places:
             day_itinerary = ', '.join([f"{place['name']} ({place['average_time']}ч)" for place in daily_places])
             daily_tags = '; '.join(['; '.join(place['tags']) for place in daily_places])
@@ -96,8 +91,7 @@ async def create_itinerary(days: int, preferences: list) -> str:
                 f"⏰ **Общее время**: {day_total_time:.1f} ч\n"
             )
         else:
-            itinerary.append(f"🌟 **День {day + 1}**: Нет доступных мероприятий.")
-        beach_added_today = False 
+            itinerary.append(f"День {day + 1}: Нет доступных мероприятий.")
 
     return "\n".join(itinerary)
 def get_access_token():
@@ -123,6 +117,13 @@ async def get_gigachat_response(query: str) -> list:
     if not access_token:
         return []
     
+    query1 = f' {query}, учитывай эти данные дни не должны повторяться, учитывай время т.е в один день не моде'  
+
+    print('###################')
+    print('###################')
+    print(query1)
+    print('###################')
+    print('###################')
 
     payload = json.dumps({
         "model": "GigaChat",
@@ -142,16 +143,13 @@ async def get_gigachat_response(query: str) -> list:
             if response.status == 200:
                 json_response = await response.json()
                 content = json_response['choices'][0]['message']['content']
-                # print(f"Ответ от GigaChat: {content}")
+                print(f"Ответ от GigaChat: {content}")
 
                 database_places = await get_places_from_db()
-                print(database_places)
-                # preferences = extract_places_from_text(content, database_places)
-                
-                # print('#'*10)
-                # print(preferences)
-                # print(f"Извлdеченные предпочтения: {preferences}")
-                return database_places
+                preferences = extract_places_from_text(content, database_places)
+
+                print(f"Извлеченные предпочтения: {preferences}")
+                return preferences
             else:
                 logging.error("Ошибка запроса к GigaChat: %s", await response.text())
                 return []
@@ -231,7 +229,15 @@ async def get_items(message: types.Message):
 async def handle_text(message: types.Message):
     user_query = message.text
     if not any(reagent in user_query for reagent in reagents):
-        pass
+        response = await get_message_from_gigachat(user_query)
+
+        if response:
+            await message.answer(response)
+        else:
+            days = extract_days(user_query)
+            preferences = await get_message_from_gigachat(user_query)
+            itinerary = await create_itinerary(days, preferences)
+            await message.answer(itinerary)
     else:
         days = extract_days(user_query)
         preferences = await get_gigachat_response(user_query)
