@@ -18,28 +18,26 @@ dp = Dispatcher(bot, storage=storage)
 async def db_connect():
     return await aiosqlite.connect('case2giga.db')
 
-reagents = ['маршрут', 'путь', 'маршут', 'мршрут', 'маршрт', 'мршрт', 'маршрyт']
-
+reagents = ['маршрут', 'путь', 'маршут', 'мршрут', 'маршрт', 'мршрт', 'маршрyт', 'план', 'плн', 'программу', 'програму', 'прогу', 'распорядок', 'расписание', 'распсание' ]
 async def get_places_from_db():
-    db = await db_connect()  # Убедитесь, что функция db_connect корректно открывает соединение
+    db = await db_connect()  
     places = []
     try:
         async with db.execute("SELECT name, average_time, tags FROM giga") as cursor:
             async for row in cursor:
-                name = row[0].strip()  # Удаляем пробелы, если есть
-                average_time = row[1]  # Время
-                tags = row[2].split(',') if row[2] else []  # Если теги существуют, разделяем их на список
+                name = row[0].strip()  
+                average_time = row[1]  
+                tags = row[2].split(',') if row[2] else [] 
 
-                # Добавляем место в список
                 places.append({
                     'name': name,
                     'average_time': average_time,
-                    'tags': [tag.strip() for tag in tags]  # Убираем пробелы
+                    'tags': [tag.strip() for tag in tags]  
                 })
     except Exception as e:
-        print(f"Ошибка при извлечении данных: {e}")  # Выводим ошибку для отладки
+        print(f"Ошибка при извлечении данных: {e}") 
     finally:
-        await db.close()  # Закрываем соединение
+        await db.close()  
     return places
 
 def extract_days(user_query: str) -> int:
@@ -205,7 +203,7 @@ def extract_places_from_text(text: str, database_places: list) -> list:
 
     return found_places
 
-@dp.message_handler(commands=['start'])
+@dp.message_handler(commands=['start', 'restart'])
 async def send_welcome(message: types.Message):
     await message.reply("""
 Здравствуйте! 🌟
@@ -215,6 +213,16 @@ async def send_welcome(message: types.Message):
 🎉 Есть ли какие-то конкретные достопримечательности или мероприятия, которые вы мечтаете посетить?  
 Ваши предпочтения позволят мне предложить наиболее подходящие варианты для вашего путешествия. Давайте создадим вместе ваше идеальное приключение! 🌅✨
 """)
+
+
+@dp.message_handler(commands=['help'])
+async def help(message: types.Message):
+    await message.answer("""
+        Для использования бота напишите ваш запрос.\n
+        Пример запроса: Составь маршрут на 5 дней. 
+
+""")
+
 
 @dp.message_handler(commands=['get_items'])
 async def get_items(message: types.Message):
