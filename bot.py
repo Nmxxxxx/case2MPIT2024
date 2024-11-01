@@ -2,6 +2,7 @@ from imports import *
 from banner import banner
 import re
 import random
+import os
 
 API_TOKEN = '7999577438:AAF-WBB8_ABAbEa-MhuR-4wTKL3s4xaUUm4' 
 GIGACHAT_API_URL = 'https://gigachat.devices.sberbank.ru/api/v1/chat/completions' 
@@ -205,16 +206,24 @@ def extract_places_from_text(text: str, database_places: list) -> list:
 
 @dp.message_handler(commands=['start', 'restart'])
 async def send_welcome(message: types.Message):
-    await message.reply("""
+
+    photo_path = os.path.abspath('img/starter.png')  
+
+    
+    with open(photo_path, 'rb') as photo:  
+        await message.answer_photo(photo=photo, caption="""
 Здравствуйте! 🌟
+
 Я здесь, чтобы помочь вам создать незабываемое путешествие! ✈️ Чтобы подобрать оптимальное количество дней для вашей поездки и предложить вам самые интересные места для посещения, мне нужно несколько деталей:
+
 🌍 Куда вы планируете поехать?  
+
 💖 Какие у вас интересы?  
+
 🎉 Есть ли какие-то конкретные достопримечательности или мероприятия, которые вы мечтаете посетить?  
+
 Ваши предпочтения позволят мне предложить наиболее подходящие варианты для вашего путешествия. Давайте создадим вместе ваше идеальное приключение! 🌅✨
 """)
-
-
 @dp.message_handler(commands=['help'])
 async def help(message: types.Message):
     await message.answer("""
